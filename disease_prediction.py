@@ -53,13 +53,23 @@ GLOBAL_CSS = """
 
 /* ── BASE ── */
 html, body,
+[data-testid="stApp"],
 [data-testid="stAppViewContainer"],
 [data-testid="stAppViewBlockContainer"] {
     background: linear-gradient(150deg, #ddeefa 0%, #f5faff 60%, #ffffff 100%) !important;
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 100vh !important;
 }
 [data-testid="stMainBlockContainer"] {
     background: transparent !important;
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+}
+[data-testid="stAppViewContainer"] > .main {
+    padding-top: 0 !important;
+    margin-top: 0 !important;
 }
 
 /* hide Streamlit chrome */
