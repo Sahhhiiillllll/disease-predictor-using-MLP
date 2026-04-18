@@ -216,8 +216,27 @@ html, body,
     color: var(--txt) !important;
     opacity: 1 !important;
 }
+[data-baseweb="popover"] {
+    background: #ffffff !important;
+}
+[data-baseweb="popover"] > div {
+    background: #ffffff !important;
+    border: 1px solid rgba(74,144,226,0.2) !important;
+}
+[data-baseweb="menu"] {
+    background: #ffffff !important;
+}
 [data-baseweb="popover"] [role="option"] {
     color: var(--txt) !important;
+    background: #ffffff !important;
+}
+[data-baseweb="popover"] [role="option"][aria-selected="true"] {
+    background: #eaf4ff !important;
+    color: #1a2a3a !important;
+}
+[data-baseweb="popover"] [role="option"]:hover {
+    background: #f3f9ff !important;
+    color: #1a2a3a !important;
 }
 
 /* ── PRIMARY BUTTON ── */
