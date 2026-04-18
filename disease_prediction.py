@@ -101,13 +101,24 @@ html, body,
 
 /* ── HEADER ── */
 .hdr {
-    background: linear-gradient(118deg, #143d78 0%, #2d6dbf 45%, #2ECC71 100%);
-    padding: 44px 48px 32px;
+    background: linear-gradient(125deg, #102f5e 0%, #1d4f94 40%, #1aa77a 100%);
+    padding: 40px 44px 26px;
     border-radius: 0 0 36px 36px;
-    box-shadow: 0 6px 40px rgba(20,61,120,0.28);
+    box-shadow: 0 10px 42px rgba(14,51,97,0.30);
     position: relative; overflow: hidden;
     animation: fadeUp 0.6s ease both;
     margin-bottom: 4px;
+}
+.hdr::after {
+    content: '';
+    position: absolute;
+    width: 420px;
+    height: 420px;
+    right: -130px;
+    top: -170px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,0.26), rgba(255,255,255,0));
+    animation: pulseGlow 6s ease-in-out infinite;
 }
 .hdr::before {
     content: '';
@@ -117,6 +128,10 @@ html, body,
         rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px,
         transparent 1px, transparent 12px
     );
+}
+@keyframes pulseGlow {
+    0%, 100% { transform: scale(1); opacity: 0.75; }
+    50% { transform: scale(1.08); opacity: 1; }
 }
 .hdr-badge {
     display: inline-flex; align-items: center; gap: 6px;
@@ -134,6 +149,62 @@ html, body,
 .hdr-sub {
     font-size: 1rem; color: rgba(255,255,255,0.82);
     margin: 0 0 22px; font-weight: 400;
+}
+.hdr-grid {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr;
+    gap: 18px;
+    align-items: center;
+    position: relative;
+    z-index: 2;
+}
+.hdr-panel {
+    background: rgba(255,255,255,0.11);
+    border: 1px solid rgba(255,255,255,0.24);
+    border-radius: 14px;
+    padding: 12px 14px;
+    backdrop-filter: blur(3px);
+}
+.hdr-panel-title {
+    font-size: 0.74rem;
+    color: rgba(255,255,255,0.85);
+    letter-spacing: 1px;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+.hdr-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.hdr-pill {
+    background: rgba(255,255,255,0.16);
+    border: 1px solid rgba(255,255,255,0.28);
+    color: #f2fbff;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 600;
+}
+.thought-wrap {
+    position: relative;
+    overflow: hidden;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.22);
+    background: rgba(7, 26, 52, 0.35);
+}
+.thought-track {
+    display: flex;
+    width: max-content;
+    animation: thoughtSlide 16s linear infinite;
+}
+.thought-item {
+    color: rgba(236,247,255,0.93);
+    font-size: 0.82rem;
+    font-weight: 500;
+    padding: 9px 16px;
+    white-space: nowrap;
+}
+@keyframes thoughtSlide {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
 }
 
 /* ── ECG ANIMATION ── */
@@ -520,12 +591,38 @@ st.markdown("""
 </div>
 
 <div class="hdr fadein">
-  <div class="hdr-badge">🛡️ &nbsp;AI-Powered Clinical Decision Support</div>
-  <div class="hdr-title">🩺 AI Disease Prediction System</div>
-  <div class="hdr-sub">
-    Smart healthcare assistance powered by Machine Learning —
-    built for low-resource clinical settings
+  <div class="hdr-grid">
+    <div>
+      <div class="hdr-badge">🛡️ &nbsp;AI-Powered Clinical Decision Support</div>
+      <div class="hdr-title">🩺 AI Disease Prediction System</div>
+      <div class="hdr-sub">
+        Bridging clinical expertise with machine intelligence for faster, smarter first-line triage.
+      </div>
+    </div>
+    <div class="hdr-panel">
+      <div class="hdr-panel-title">AI + Medical Intelligence</div>
+      <div class="hdr-pills">
+        <span class="hdr-pill">🧠 Pattern Learning</span>
+        <span class="hdr-pill">🫀 Symptom Mapping</span>
+        <span class="hdr-pill">📊 Risk Ranking</span>
+        <span class="hdr-pill">⚕️ Clinical Support</span>
+      </div>
+    </div>
   </div>
+
+  <div class="thought-wrap">
+    <div class="thought-track">
+      <div class="thought-item">"Early insight saves critical time in care pathways."</div>
+      <div class="thought-item">"Responsible AI augments doctors, it never replaces them."</div>
+      <div class="thought-item">"Better symptom intelligence leads to better triage outcomes."</div>
+      <div class="thought-item">"Data-guided screening can improve consistency in low-resource settings."</div>
+      <div class="thought-item">"Early insight saves critical time in care pathways."</div>
+      <div class="thought-item">"Responsible AI augments doctors, it never replaces them."</div>
+      <div class="thought-item">"Better symptom intelligence leads to better triage outcomes."</div>
+      <div class="thought-item">"Data-guided screening can improve consistency in low-resource settings."</div>
+    </div>
+  </div>
+
   <svg class="ecg-svg" viewBox="0 0 900 44" preserveAspectRatio="none"
        xmlns="http://www.w3.org/2000/svg">
     <polyline class="ecg-path"
