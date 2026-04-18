@@ -1,249 +1,683 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import tensorflow as tf
-import plotly.express as px
-from tensorflow.keras.models import load_model
+"""
+AI Disease Prediction System
+Streamlit Cloud-ready version
+- Zero external CDN dependencies (no Google Fonts, no Font Awesome)
+- Zero JavaScript (pure CSS animations only)
+- All styling via st.markdown unsafe_allow_html
+- Drop-in replacement for the original disease_prediction.py
+"""
+
 import random
 from pathlib import Path
 
-# Set the theme for the app
-st.set_page_config(page_title="🩺 Disease Prediction Based on Symptoms", layout="wide")
+import numpy as np
+import pandas as pd
+import plotly.express as px
+import streamlit as st
+from tensorflow.keras.models import load_model
 
-# Load the trained MLP model
-MODEL_CANDIDATES = [
-    Path("disease_model.h5"),
-    Path("resources/mlp_model.h5"),
-]
+# ── PAGE CONFIG  (must be the very first Streamlit call) ──────────────────────
+st.set_page_config(
+    page_title="AI Disease Prediction System",
+    page_icon="🩺",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+# ── ALL CSS — self-contained, zero external dependencies ──────────────────────
+GLOBAL_CSS = """
+<style>
+/* ── CSS VARIABLES ── */
+:root {
+    --blue:    #4A90E2;
+    --blue-dk: #2d6dbf;
+    --teal:    #2ECC71;
+    --teal-dk: #25a85d;
+    --card:    rgba(255,255,255,0.96);
+    --shadow:  0 8px 32px rgba(74,144,226,0.14);
+    --r:       16px;
+    --txt:     #1a2a3a;
+    --muted:   #6b8299;
+}
+
+/* ── BASE ── */
+html, body,
+[data-testid="stAppViewContainer"],
+[data-testid="stAppViewBlockContainer"] {
+    background: linear-gradient(150deg, #ddeefa 0%, #f5faff 60%, #ffffff 100%) !important;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif !important;
+}
+[data-testid="stMainBlockContainer"] {
+    background: transparent !important;
+}
+
+/* hide Streamlit chrome */
+#MainMenu, footer, [data-testid="stToolbar"] { visibility: hidden !important; }
+[data-testid="stSidebar"] { display: none !important; }
+.block-container {
+    padding-top: 0 !important;
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+    max-width: 1200px !important;
+}
+
+/* ── FADE-IN ── */
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: translateY(0);    }
+}
+.fadein { animation: fadeUp 0.7s ease both; }
+
+/* ── FLOATING BACKGROUND BLOBS ── */
+@keyframes drift {
+    0%,100% { transform: translateY(0)    rotate(0deg);  }
+    40%     { transform: translateY(-22px) rotate(7deg);  }
+    70%     { transform: translateY(12px)  rotate(-5deg); }
+}
+.bg-shapes {
+    position: fixed; inset: 0;
+    pointer-events: none; z-index: 0; overflow: hidden;
+}
+.sh {
+    position: absolute; border-radius: 50%; opacity: 0.07;
+    animation: drift linear infinite;
+}
+.sh1 { width:220px; height:220px; background:var(--blue);  top:4%;  left:1%;  animation-duration:15s; }
+.sh2 { width:160px; height:160px; background:var(--teal);  top:9%;  right:3%; animation-duration:12s; animation-delay:2s; }
+.sh3 { width:300px; height:300px; background:var(--blue);  top:48%; left:0%;  animation-duration:19s; animation-delay:1s; }
+.sh4 { width:120px; height:120px; background:var(--teal);  top:63%; right:2%; animation-duration:14s; animation-delay:3s; }
+.sh5 { width:200px; height:200px; background:#9b59b6;      top:78%; left:38%; animation-duration:17s; animation-delay:4s; }
+
+/* ── HEADER ── */
+.hdr {
+    background: linear-gradient(118deg, #143d78 0%, #2d6dbf 45%, #2ECC71 100%);
+    padding: 44px 48px 32px;
+    border-radius: 0 0 36px 36px;
+    box-shadow: 0 6px 40px rgba(20,61,120,0.28);
+    position: relative; overflow: hidden;
+    animation: fadeUp 0.6s ease both;
+    margin-bottom: 4px;
+}
+.hdr::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(
+        45deg,
+        rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px,
+        transparent 1px, transparent 12px
+    );
+}
+.hdr-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.28);
+    border-radius: 30px; padding: 5px 16px;
+    font-size: 0.78rem; font-weight: 600; color: #fff;
+    letter-spacing: 0.4px; margin-bottom: 14px;
+}
+.hdr-title {
+    font-size: 2.4rem; font-weight: 800; color: #fff;
+    margin: 0 0 6px; letter-spacing: -0.5px;
+    text-shadow: 0 2px 14px rgba(0,0,0,0.2);
+}
+.hdr-sub {
+    font-size: 1rem; color: rgba(255,255,255,0.82);
+    margin: 0 0 22px; font-weight: 400;
+}
+
+/* ── ECG ANIMATION ── */
+@keyframes ecgDraw {
+    0%  { stroke-dashoffset: 920; opacity: 1; }
+    85% { stroke-dashoffset: 0;   opacity: 1; }
+    100%{ stroke-dashoffset: 0;   opacity: 0; }
+}
+.ecg-svg  { width:100%; height:44px; overflow:hidden; display:block; }
+.ecg-path {
+    stroke: rgba(255,255,255,0.5); stroke-width: 2.2; fill: none;
+    stroke-dasharray: 920; stroke-dashoffset: 920;
+    animation: ecgDraw 3.2s linear infinite;
+}
+
+/* ── STEP INDICATORS ── */
+.steps {
+    display: flex; align-items: center;
+    margin: 26px 0 20px;
+    animation: fadeUp 0.7s 0.1s ease both; opacity: 0;
+}
+.step-item {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; position: relative;
+}
+.step-item:not(:last-child)::after {
+    content:''; position:absolute; top:17px; left:55%;
+    width:90%; height:2px;
+    background: linear-gradient(90deg, var(--blue), rgba(74,144,226,0.12));
+}
+.step-dot {
+    width:34px; height:34px; border-radius:50%;
+    background: linear-gradient(135deg, var(--blue), var(--teal));
+    color:#fff; font-size:0.82rem; font-weight:700;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow: 0 3px 12px rgba(74,144,226,0.38);
+    position:relative; z-index:1;
+}
+.step-lbl {
+    font-size:0.7rem; color:var(--muted);
+    margin-top:6px; font-weight:600; text-align:center;
+}
+
+/* ── CARD ── */
+.card {
+    background: var(--card);
+    border-radius: var(--r); box-shadow: var(--shadow);
+    padding: 26px 28px; border: 1px solid rgba(74,144,226,0.09);
+    animation: fadeUp 0.7s 0.15s ease both; opacity: 0;
+}
+.slabel {
+    font-size:0.68rem; font-weight:700; letter-spacing:2px;
+    text-transform:uppercase; color:var(--blue); margin-bottom:4px;
+}
+.stitle {
+    font-size:1.25rem; font-weight:700; color:var(--txt); margin:0 0 18px;
+}
+
+/* ── SELECTBOX ── */
+[data-testid="stSelectbox"] label {
+    font-weight: 600 !important;
+    font-size: 0.84rem !important;
+    color: var(--txt) !important;
+}
+[data-testid="stSelectbox"] > div > div {
+    background: #f0f7ff !important;
+    border: 1.5px solid rgba(74,144,226,0.22) !important;
+    border-radius: 10px !important;
+    transition: border-color 0.2s, box-shadow 0.2s !important;
+}
+[data-testid="stSelectbox"] > div > div:focus-within {
+    border-color: var(--blue) !important;
+    box-shadow: 0 0 0 3px rgba(74,144,226,0.12) !important;
+}
+
+/* ── PRIMARY BUTTON ── */
+[data-testid="stButton"] > button {
+    background: linear-gradient(135deg, #4A90E2 0%, #2d6dbf 100%) !important;
+    color: #fff !important; border: none !important;
+    border-radius: 12px !important;
+    font-weight: 700 !important; font-size: 0.95rem !important;
+    padding: 13px 36px !important; width: 100% !important;
+    margin-top: 12px !important;
+    box-shadow: 0 4px 18px rgba(74,144,226,0.36) !important;
+    transition: transform 0.18s, box-shadow 0.18s !important;
+    letter-spacing: 0.2px !important;
+}
+[data-testid="stButton"] > button:hover:not(:disabled) {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 28px rgba(74,144,226,0.48) !important;
+}
+[data-testid="stButton"] > button:disabled {
+    background: linear-gradient(135deg, #a8c4e4 0%, #8eaed0 100%) !important;
+    box-shadow: none !important; transform: none !important;
+    cursor: not-allowed !important; opacity: 0.72 !important;
+}
+
+/* ── RESULT CARD ── */
+@keyframes resultPop {
+    from { opacity:0; transform:scale(0.94) translateY(10px); }
+    to   { opacity:1; transform:scale(1)    translateY(0);    }
+}
+.result-card {
+    background: linear-gradient(135deg, #edfbf3 0%, #e8f4fd 100%);
+    border: 2px solid rgba(46,204,113,0.3);
+    border-radius: var(--r); padding: 26px 28px;
+    animation: resultPop 0.55s cubic-bezier(0.34,1.56,0.64,1) both;
+    box-shadow: 0 6px 28px rgba(46,204,113,0.13);
+    margin-bottom: 18px;
+}
+.r-label { font-size:0.68rem; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--teal-dk); margin-bottom:4px; }
+.r-name  { font-size:1.9rem; font-weight:800; color:var(--txt); line-height:1.15; margin-bottom:4px; }
+.r-sub   { font-size:0.82rem; color:var(--muted); margin-bottom:22px; }
+
+/* ── PROGRESS BARS ── */
+@keyframes fillIn {
+    from { width: 0%; }
+}
+.pb-wrap { margin-bottom:12px; }
+.pb-head { display:flex; justify-content:space-between; font-size:0.8rem; font-weight:600; color:var(--txt); margin-bottom:5px; }
+.pb-track { background:#ddeefa; border-radius:8px; height:9px; overflow:hidden; }
+.pb-fill  { height:100%; border-radius:8px; animation:fillIn 1.1s cubic-bezier(0.4,0,0.2,1) both; }
+
+/* ── DISEASE PILLS ── */
+@keyframes pillIn {
+    from { opacity:0; transform:translateY(5px); }
+    to   { opacity:1; transform:translateY(0);   }
+}
+.pill-wrap { display:flex; flex-wrap:wrap; gap:7px; margin-top:8px; }
+.pill {
+    background: rgba(74,144,226,0.09);
+    border: 1px solid rgba(74,144,226,0.2);
+    border-radius:20px; padding:4px 13px;
+    font-size:0.78rem; color:#2d5f9e; font-weight:600;
+    animation:pillIn 0.4s ease both;
+}
+
+/* ── HEALTH TIPS ── */
+@keyframes tipSlide {
+    from { opacity:0; transform:translateX(-10px); }
+    to   { opacity:0.93; transform:translateX(0); }
+}
+.tips-card {
+    background: linear-gradient(135deg, #1a3f7a 0%, #4A90E2 100%);
+    border-radius:var(--r); padding:22px 26px; color:#fff;
+    margin-top:20px;
+    animation:fadeUp 0.7s 0.25s ease both; opacity:0;
+}
+.tips-title { font-size:1rem; font-weight:700; margin-bottom:14px; }
+.tip-row {
+    display:flex; align-items:flex-start; gap:10px;
+    padding:9px 0; border-bottom:1px solid rgba(255,255,255,0.1);
+    font-size:0.85rem; line-height:1.5;
+    animation:tipSlide 0.5s ease both; opacity:0;
+}
+.tip-row:last-child { border-bottom:none; }
+.tip-row:nth-child(2) { animation-delay:0.05s; }
+.tip-row:nth-child(3) { animation-delay:0.12s; }
+.tip-row:nth-child(4) { animation-delay:0.19s; }
+.tip-row:nth-child(5) { animation-delay:0.26s; }
+.tip-ico { flex-shrink:0; margin-top:1px; }
+
+/* ── DISCLAIMER ── */
+.disc {
+    background:rgba(74,144,226,0.06);
+    border-left:4px solid var(--blue);
+    border-radius:0 10px 10px 0;
+    padding:12px 18px;
+    font-size:0.79rem; color:var(--muted);
+    margin-top:24px; line-height:1.6;
+}
+.disc strong { color:var(--blue-dk); }
+
+/* ── WARNING HINT ── */
+.warn-hint {
+    background:rgba(230,126,34,0.08);
+    border-left:3px solid #e67e22;
+    border-radius:0 8px 8px 0;
+    padding:8px 14px; font-size:0.8rem;
+    color:#a0522d; margin-top:10px; font-weight:500;
+}
+
+/* ── PLOTLY ── */
+[data-testid="stPlotlyChart"] { border-radius:14px; overflow:hidden; }
+</style>
+"""
+st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
+
+# ── MODEL LOADING ─────────────────────────────────────────────────────────────
+MODEL_CANDIDATES = [Path("disease_model.h5"), Path("resources/mlp_model.h5")]
 model = None
-for model_path in MODEL_CANDIDATES:
-    if model_path.exists():
+for mp in MODEL_CANDIDATES:
+    if mp.exists():
         try:
-            model = load_model(str(model_path))
+            model = load_model(str(mp))
             break
         except Exception as exc:
-            st.error(f"Model file found but could not be loaded: {model_path}")
-            st.exception(exc)
+            st.error(f"Model file found but failed to load ({mp}): {exc}")
             st.stop()
 
 if model is None:
     st.error(
-        "No trained model file found. Add either "
-        "'disease_model.h5' in the project root or 'resources/mlp_model.h5'."
+        "No trained model found. Place 'disease_model.h5' in the project root "
+        "or 'resources/mlp_model.h5'."
     )
     st.stop()
 
-# Load and prepare the dataset
+# ── DATASET LOADING ───────────────────────────────────────────────────────────
 try:
-    df = pd.read_csv('resources/dataset_kaggle.csv')
+    df = pd.read_csv("resources/dataset_kaggle.csv")
 except Exception as exc:
-    st.error("Dataset file could not be loaded: 'resources/dataset_kaggle.csv'")
-    st.exception(exc)
+    st.error(f"Dataset could not be loaded: {exc}")
     st.stop()
 
-# Full list of symptoms
-symptoms_list = ['Anemia', 'Anxiety', 'Aura', 'Belching', 'Bladder issues', 'Bleeding mole', 
-                 'Blisters', 'Bloating', 'Blood in stool', 'Body aches', 'Bone fractures', 
-                 'Bone pain', 'Bowel issues', 'Burning', 'Butterfly-shaped rash', 
-                 'Change in bowel habits', 'Change in existing mole', 'Chest discomfort', 
-                 'Chest pain', 'Congestion', 'Constipation', 'Coughing up blood', 'Depression', 
-                 'Diarrhea', 'Difficulty performing familiar tasks', 'Difficulty sleeping', 
-                 'Difficulty swallowing', 'Difficulty thinking', 'Difficulty walking', 
-                 'Double vision', 'Easy bruising', 'Fatigue', 'Fear', 'Frequent infections', 
-                 'Frequent urination', 'Fullness', 'Gas', 'Hair loss', 'Hard lumps', 'Headache', 
-                 'Hunger', 'Inability to defecate', 'Increased mucus production', 
-                 'Increased thirst', 'Irregular heartbeat', 'Irritability', 'Itching', 
-                 'Jaw pain', 'Limited range of motion', 'Loss of automatic movements', 
-                 'Loss of height', 'Loss of smell', 'Loss of taste', 'Lump or swelling', 
-                 'Mild fever', 'Misplacing things', 'Morning stiffness', 'Mouth sores', 
-                 'Mucus production', 'Nausea', 'Neck stiffness', 'Nosebleeds', 'Numbness', 
-                 'Pain during urination', 'Pale skin', 'Persistent cough', 'Persistent pain', 
-                 'Pigment spread', 'Pneumonia', 'Poor judgment', 'Problems with words', 
-                 'Rapid pulse', 'Rash', 'Receding gums', 'Redness', 'Redness in joints', 
-                 'Reduced appetite', 'Seizures', 'Sensitivity to light', 'Severe headache', 
-                 'Shortness of breath', 'Skin changes', 'Skin infections', 'Slight fever', 
-                 'Sneezing', 'Sore that doesn’t heal', 'Soreness', 'Staring spells', 
-                 'Stiff joints', 'Stooped posture', 'Swelling', 'Swelling in ankles', 
-                 'Swollen joints', 'Swollen lymph nodes', 'Tender abdomen', 'Tenderness', 
-                 'Thickened skin', 'Throbbing pain', 'Tophi', 'Tremor', 'Unconsciousness', 
-                 'Unexplained bleeding', 'Unexplained fevers', 'Vomiting', 'Weakness', 
-                 'Withdrawal from work', 'Writing changes']
+# ── SYMPTOMS ──────────────────────────────────────────────────────────────────
+SYMPTOMS = [
+    "Anemia", "Anxiety", "Aura", "Belching", "Bladder issues", "Bleeding mole",
+    "Blisters", "Bloating", "Blood in stool", "Body aches", "Bone fractures",
+    "Bone pain", "Bowel issues", "Burning", "Butterfly-shaped rash",
+    "Change in bowel habits", "Change in existing mole", "Chest discomfort",
+    "Chest pain", "Congestion", "Constipation", "Coughing up blood", "Depression",
+    "Diarrhea", "Difficulty performing familiar tasks", "Difficulty sleeping",
+    "Difficulty swallowing", "Difficulty thinking", "Difficulty walking",
+    "Double vision", "Easy bruising", "Fatigue", "Fear", "Frequent infections",
+    "Frequent urination", "Fullness", "Gas", "Hair loss", "Hard lumps", "Headache",
+    "Hunger", "Inability to defecate", "Increased mucus production",
+    "Increased thirst", "Irregular heartbeat", "Irritability", "Itching",
+    "Jaw pain", "Limited range of motion", "Loss of automatic movements",
+    "Loss of height", "Loss of smell", "Loss of taste", "Lump or swelling",
+    "Mild fever", "Misplacing things", "Morning stiffness", "Mouth sores",
+    "Mucus production", "Nausea", "Neck stiffness", "Nosebleeds", "Numbness",
+    "Pain during urination", "Pale skin", "Persistent cough", "Persistent pain",
+    "Pigment spread", "Pneumonia", "Poor judgment", "Problems with words",
+    "Rapid pulse", "Rash", "Receding gums", "Redness", "Redness in joints",
+    "Reduced appetite", "Seizures", "Sensitivity to light", "Severe headache",
+    "Shortness of breath", "Skin changes", "Skin infections", "Slight fever",
+    "Sneezing", "Sore that doesn't heal", "Soreness", "Staring spells",
+    "Stiff joints", "Stooped posture", "Swelling", "Swelling in ankles",
+    "Swollen joints", "Swollen lymph nodes", "Tender abdomen", "Tenderness",
+    "Thickened skin", "Throbbing pain", "Tophi", "Tremor", "Unconsciousness",
+    "Unexplained bleeding", "Unexplained fevers", "Vomiting", "Weakness",
+    "Withdrawal from work", "Writing changes",
+]
 
-# Streamlit app layout
-st.title("🩺 Disease Prediction Based on Symptoms")
+SYMPTOM_ICONS = {
+    "Headache": "🤕", "Fatigue": "😴", "Nausea": "🤢", "Vomiting": "🤮",
+    "Chest pain": "💔", "Shortness of breath": "😮‍💨", "Diarrhea": "🚽",
+    "Rash": "🔴", "Seizures": "⚡", "Tremor": "〰️", "Swelling": "🫧",
+    "Weakness": "💪", "Coughing up blood": "🩸", "Anxiety": "😰",
+    "Depression": "😞", "Hair loss": "👤", "Sneezing": "🤧", "Numbness": "🫥",
+}
+
+HEALTH_TIPS = [
+    ("💧", "Stay well-hydrated — aim for at least 8 glasses of water daily."),
+    ("🚶", "30 minutes of moderate walking daily significantly reduces cardiovascular risk."),
+    ("🌙", "Quality sleep (7–9 hours) strengthens immune resilience and cognition."),
+    ("🥦", "A balanced diet rich in fibre and micronutrients aids disease prevention."),
+]
+
+BAR_COLORS = ["#4A90E2", "#2ECC71", "#f39c12", "#e74c3c", "#9b59b6"]
+
+# ── SESSION STATE ─────────────────────────────────────────────────────────────
+if "selected_symptoms" not in st.session_state:
+    st.session_state.selected_symptoms = ["Please Select"] * 5
+
+# ── HEADER ────────────────────────────────────────────────────────────────────
 st.markdown("""
-Welcome to the Disease Prediction app. This tool allows healthcare providers and patients to input symptoms and receive potential disease predictions based on machine learning. The predictions prioritize serious illnesses depending on the symptoms provided.
-""")
+<div class="bg-shapes">
+  <div class="sh sh1"></div><div class="sh sh2"></div>
+  <div class="sh sh3"></div><div class="sh sh4"></div><div class="sh sh5"></div>
+</div>
 
-# Initialize selected symptoms list
-if 'selected_symptoms' not in st.session_state:
-    st.session_state.selected_symptoms = ['Please Select'] * 5
+<div class="hdr fadein">
+  <div class="hdr-badge">🛡️ &nbsp;AI-Powered Clinical Decision Support</div>
+  <div class="hdr-title">🩺 AI Disease Prediction System</div>
+  <div class="hdr-sub">
+    Smart healthcare assistance powered by Machine Learning —
+    built for low-resource clinical settings
+  </div>
+  <svg class="ecg-svg" viewBox="0 0 900 44" preserveAspectRatio="none"
+       xmlns="http://www.w3.org/2000/svg">
+    <polyline class="ecg-path"
+      points="0,22 55,22 75,22 85,3 96,42 110,3 122,42 133,22 158,22
+              218,22 238,22 248,3 259,42 273,3 285,42 296,22 321,22
+              381,22 401,22 411,3 422,42 436,3 448,42 459,22 484,22
+              544,22 564,22 574,3 585,42 599,3 611,42 622,22 647,22
+              707,22 727,22 737,3 748,42 762,3 774,42 785,22 810,22 900,22"/>
+  </svg>
+</div>
+""", unsafe_allow_html=True)
 
-# Function to display dropdowns and manage selections
-def display_dropdowns():
+# ── STEP INDICATORS ───────────────────────────────────────────────────────────
+st.markdown("""
+<div class="steps">
+  <div class="step-item">
+    <div class="step-dot">1</div><div class="step-lbl">Select Symptoms</div>
+  </div>
+  <div class="step-item">
+    <div class="step-dot">2</div><div class="step-lbl">Run Prediction</div>
+  </div>
+  <div class="step-item">
+    <div class="step-dot">3</div><div class="step-lbl">Review Results</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ── TWO-COLUMN LAYOUT ─────────────────────────────────────────────────────────
+col1, col2 = st.columns([1, 1], gap="large")
+
+# ═══════════════════════════════════
+# LEFT — symptom selection
+# ═══════════════════════════════════
+with col1:
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown('<div class="slabel">📋 Step 1</div>', unsafe_allow_html=True)
+    st.markdown('<div class="stitle">Select Patient Symptoms</div>', unsafe_allow_html=True)
+
     for i in range(len(st.session_state.selected_symptoms)):
-        options = ['Please Select'] + sorted(set(symptoms_list) - set(st.session_state.selected_symptoms[:i] + st.session_state.selected_symptoms[i+1:]))
+        others = (
+            st.session_state.selected_symptoms[:i]
+            + st.session_state.selected_symptoms[i + 1:]
+        )
+        options = ["Please Select"] + sorted(set(SYMPTOMS) - set(others))
+        current = st.session_state.selected_symptoms[i]
+        icon = SYMPTOM_ICONS.get(current, "🩹")
 
-        # Initialize session state for the typed value if not already set
-        if f"typed_{i}" not in st.session_state:
-            st.session_state[f"typed_{i}"] = ""
-
-        def on_select_change():
-            typed_value = st.session_state[f"typed_{i}"].strip()
-            if typed_value in symptoms_list:
-                st.session_state.selected_symptoms[i] = typed_value
-            elif st.session_state.selected_symptoms[i] not in symptoms_list:
-                st.session_state.selected_symptoms[i] = 'Please Select'
-
-        selected_symptom = st.selectbox(
-            f"Symptom {i+1}",
+        chosen = st.selectbox(
+            f"{icon} Symptom {i + 1}",
             options=options,
-            index=options.index(st.session_state.selected_symptoms[i]) if st.session_state.selected_symptoms[i] in options else 0,
-            key=f"dropdown_{i}",
-            on_change=on_select_change
+            index=options.index(current) if current in options else 0,
+            key=f"sym_{i}",
+        )
+        st.session_state.selected_symptoms[i] = chosen
+
+    # "Add symptom" button — styled as ghost via CSS on [data-testid="stButton"]
+    # We use a unique key so we can target it if needed, but styling is global
+    if len(st.session_state.selected_symptoms) < 17:
+        if st.button("＋  Add Another Symptom", key="add_sym"):
+            st.session_state.selected_symptoms.append("Please Select")
+            st.rerun()
+
+    # Compute valid selections
+    final_selected = [
+        s for s in st.session_state.selected_symptoms
+        if s != "Please Select" and s in SYMPTOMS
+    ]
+
+    # Hint
+    remaining = max(0, 5 - len(final_selected))
+    if remaining > 0:
+        st.markdown(
+            f'<div class="warn-hint">⚠️ Select at least '
+            f'<strong>{remaining}</strong> more symptom(s) to enable prediction.</div>',
+            unsafe_allow_html=True,
         )
 
-        st.session_state.selected_symptoms[i] = selected_symptom
+    # Predict button
+    predict_disabled = not (5 <= len(final_selected) <= 17)
+    predict_clicked = st.button(
+        "🔍  Predict Disease",
+        disabled=predict_disabled,
+        key="predict_btn",
+    )
 
-    if len(st.session_state.selected_symptoms) < 17:
-        if st.button("Add Another Symptom"):
-            st.session_state.selected_symptoms.append('Please Select')
+    st.markdown("</div>", unsafe_allow_html=True)  # /card
 
-# Create a two-column layout
-col1, col2 = st.columns([1, 1])
+    # Health tips
+    tips_rows = "".join(
+        f'<div class="tip-row"><span class="tip-ico">{ico}</span><span>{tip}</span></div>'
+        for ico, tip in HEALTH_TIPS
+    )
+    st.markdown(
+        f'<div class="tips-card"><div class="tips-title">💡  Health Tips</div>{tips_rows}</div>',
+        unsafe_allow_html=True,
+    )
 
-with col1:
-    # Display dropdowns for symptom selection
-    display_dropdowns()
-
-# Filter out 'Please Select' from the final symptom list
-final_selected_symptoms = [symptom for symptom in st.session_state.selected_symptoms if symptom != 'Please Select' and symptom in symptoms_list]
-
-# Placeholder for the pie chart
+# ═══════════════════════════════════
+# RIGHT — prediction output
+# ═══════════════════════════════════
 with col2:
-    if len(final_selected_symptoms) < 5:
-        fig = px.pie(names=["Please make symptom selections to generate probable disease cause"], values=[100], title="Awaiting Input")
-        st.markdown("**User must select at least 5 symptoms for Predict to be enabled**", unsafe_allow_html=True)
-        st.plotly_chart(fig)
-    else:
-        # Limit number of selected symptoms to 17
-        if len(final_selected_symptoms) > 17:
-            st.warning("You can only select up to 17 symptoms.")
-            final_selected_symptoms = final_selected_symptoms[:17]
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown('<div class="slabel">📊 Step 2 &amp; 3</div>', unsafe_allow_html=True)
+    st.markdown('<div class="stitle">Prediction &amp; Analysis</div>', unsafe_allow_html=True)
 
-        # Disable predict button if conditions are not met
-        predict_disabled = len(final_selected_symptoms) < 5 or len(final_selected_symptoms) > 17
+    def _placeholder_chart(title: str):
+        fig = px.pie(
+            names=[title], values=[100],
+            color_discrete_sequence=["#d0e4f7"],
+        )
+        fig.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            title_font_size=13, showlegend=False,
+            margin=dict(t=40, b=10, l=10, r=10), height=290,
+        )
+        fig.update_traces(textinfo="none", hoverinfo="none")
+        st.plotly_chart(fig, use_container_width=True)
 
-        if st.button("Predict", disabled=predict_disabled):
-            # Convert selected symptoms to encoded format
-            encoded_symptoms = np.zeros(len(symptoms_list))
-            for symptom in final_selected_symptoms:
-                if symptom in symptoms_list:
-                    encoded_symptoms[symptoms_list.index(symptom)] = 1
+    # ── Not enough symptoms ──
+    if len(final_selected) < 5:
+        _placeholder_chart("Select \u2265 5 symptoms to generate a prediction")
 
-            # Prepare input for the model
-            final_input = np.zeros((1, 676))  # Ensure the input has 676 features as expected by the model
-            final_input[0, :len(encoded_symptoms)] = encoded_symptoms
+    # ── Predict clicked ──
+    elif predict_clicked:
+        if len(final_selected) > 17:
+            st.warning("Maximum 17 symptoms. Using the first 17.")
+            final_selected = final_selected[:17]
 
-            # Predict using the model
-            predictions = model.predict(final_input)
+        with st.spinner("Analysing symptoms with AI model…"):
+            # Encode
+            encoded = np.zeros(len(SYMPTOMS))
+            for s in final_selected:
+                if s in SYMPTOMS:
+                    encoded[SYMPTOMS.index(s)] = 1
 
-            # Post-prediction adjustments
-            disease_match_scores = {}
+            inp = np.zeros((1, 676))
+            inp[0, : len(encoded)] = encoded
+
+            predictions = model.predict(inp)
+
+            # Match-score boosts (identical to original logic)
+            scores = {}
             for _, row in df.iterrows():
-                disease_symptoms = row[1:].values  # Skip the first column (Disease)
-                disease_encoded = np.array([1 if symptom in disease_symptoms else 0 for symptom in symptoms_list])
-                match_score = np.sum(encoded_symptoms == disease_encoded)
-                disease_match_scores[row['Disease']] = match_score
+                d_enc = np.array(
+                    [1 if sym in row[1:].values else 0 for sym in SYMPTOMS]
+                )
+                scores[row["Disease"]] = int(np.sum(encoded == d_enc))
 
-            # Exact match boost
-            if any(np.array_equal(encoded_symptoms, df.iloc[i, 1:].values) for i in range(len(df))):
-                exact_match_disease = next(df['Disease'][i] for i in range(len(df)) if np.array_equal(encoded_symptoms, df.iloc[i, 1:].values))
-                exact_match_idx = df[df['Disease'] == exact_match_disease].index[0]
-                if exact_match_idx < len(predictions[0]):
-                    predictions[0][exact_match_idx] *= 2.0
-
-            # Partial match boost
-            elif any(score >= 10 for score in disease_match_scores.values()):
-                partial_match_disease = max(disease_match_scores, key=disease_match_scores.get)
-                partial_match_idx = df[df['Disease'] == partial_match_disease].index[0]
-                if partial_match_idx < len(predictions[0]):
-                    predictions[0][partial_match_idx] *= 1.5
-
-            # Less significant match boost
+            if any(np.array_equal(encoded, df.iloc[i, 1:].values) for i in range(len(df))):
+                em = next(
+                    df["Disease"].iloc[i] for i in range(len(df))
+                    if np.array_equal(encoded, df.iloc[i, 1:].values)
+                )
+                idx = df[df["Disease"] == em].index[0]
+                if idx < len(predictions[0]):
+                    predictions[0][idx] *= 2.0
+            elif any(v >= 10 for v in scores.values()):
+                pm = max(scores, key=scores.get)
+                idx = df[df["Disease"] == pm].index[0]
+                if idx < len(predictions[0]):
+                    predictions[0][idx] *= 1.5
             else:
-                best_match_disease = max(disease_match_scores, key=disease_match_scores.get)
-                best_match_idx = df[df['Disease'] == best_match_disease].index[0]
-                if best_match_idx < len(predictions[0]):
-                    predictions[0][best_match_idx] *= 1.2
+                bm = max(scores, key=scores.get)
+                idx = df[df["Disease"] == bm].index[0]
+                if idx < len(predictions[0]):
+                    predictions[0][idx] *= 1.2
 
-            # Normalize predictions
             predictions = predictions / predictions.sum() * 100
+            diseases = df["Disease"].unique()
+            pred_df = pd.DataFrame(predictions, columns=diseases).T
+            pred_df.columns = ["Probability"]
+            pred_df = pred_df.sort_values("Probability", ascending=False)
+            top5 = pred_df.head(5).copy()
+            top5["Probability"] = top5["Probability"] / top5["Probability"].sum() * 100
 
-            # Create DataFrame for predictions
-            diseases = df['Disease'].unique()
-            prediction_df = pd.DataFrame(predictions, columns=diseases).T
-            prediction_df.columns = ['Probability']
-            prediction_df = prediction_df.sort_values(by='Probability', ascending=False)
+        # Primary result card
+        top_disease = top5.index[0]
+        top_prob = float(top5["Probability"].iloc[0])
+        st.markdown(
+            f"""
+            <div class="result-card">
+              <div class="r-label">🩺 Primary Prediction</div>
+              <div class="r-name">{top_disease}</div>
+              <div class="r-sub">Based on {len(final_selected)} selected symptom(s)</div>
+              <div class="pb-wrap">
+                <div class="pb-head">
+                  <span>Model Confidence</span><span>{top_prob:.1f}%</span>
+                </div>
+                <div class="pb-track">
+                  <div class="pb-fill"
+                       style="width:{top_prob:.1f}%;
+                              background:linear-gradient(90deg,#2ECC71,#4A90E2);">
+                  </div>
+                </div>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-            # Select the top 5 diseases
-            top_5 = prediction_df.head(5)
+        # Pie chart
+        fig = px.pie(
+            top5, values="Probability", names=top5.index,
+            title="Top 5 Probable Diseases",
+            color_discrete_sequence=BAR_COLORS,
+        )
+        fig.update_traces(
+            textposition="inside", textinfo="percent+label",
+            pull=[0.08, 0, 0, 0, 0],
+        )
+        fig.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            title_font_size=14,
+            legend=dict(orientation="v", font=dict(size=11)),
+            margin=dict(t=40, b=10, l=10, r=10), height=320,
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
-            # Adjust the probabilities to sum to 100%
-            top_5['Probability'] = (top_5['Probability'] / top_5['Probability'].sum()) * 100
+        # Per-disease probability bars
+        for i, (disease, row) in enumerate(top5.iterrows()):
+            pct = float(row["Probability"])
+            color = BAR_COLORS[i]
+            st.markdown(
+                f"""
+                <div class="pb-wrap">
+                  <div class="pb-head">
+                    <span>{disease}</span><span>{pct:.1f}%</span>
+                  </div>
+                  <div class="pb-track">
+                    <div class="pb-fill" style="width:{pct:.1f}%; background:{color};"></div>
+                  </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-            # Display the prediction result text
-            st.markdown(f"**Patient has a high chance of having {top_5.index[0]}**")
+        # Additional disease pills
+        rest = pred_df.iloc[5:].index.tolist()
+        if rest:
+            extra = random.sample(rest, min(6, len(rest)))
+            pills = "".join(f'<span class="pill">{d}</span>' for d in extra)
+            st.markdown(
+                f"""
+                <div style="margin-top:20px;">
+                  <div class="slabel">Also consider</div>
+                  <p style="font-size:0.78rem;color:var(--muted);margin-bottom:8px;">
+                    These may warrant further clinical investigation:
+                  </p>
+                  <div class="pill-wrap">{pills}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-            # Plot interactive pie chart for the top 5 diseases
-            fig = px.pie(top_5, values='Probability', names=top_5.index, title='Top 5 Disease Predictions')
-            fig.update_traces(textposition='inside', textinfo='percent+label')
-            fig.update_layout(margin=dict(t=20, b=20, l=20, r=20), height=400, width=400)
-            st.plotly_chart(fig)
+    # ── Valid symptoms but not clicked yet ──
+    else:
+        _placeholder_chart("Ready — click Predict")
+        st.markdown(
+            '<p style="text-align:center;color:#6b8299;font-size:0.88rem;">'
+            "Click <strong>🔍 Predict Disease</strong> to generate results.</p>",
+            unsafe_allow_html=True,
+        )
 
-            # Display additional disease suggestions
-            remaining_diseases = prediction_df.iloc[5:].index.tolist()
-            if remaining_diseases:
-                additional_diseases = random.sample(remaining_diseases, min(4, len(remaining_diseases)))
-                st.write("Here are additional diseases the medical provider may want to consider, accompanied by lab work, diagnoses, and care suggestions.")
-                st.write(", ".join(additional_diseases))
-            else:
-                st.write("No other diseases can be indicated at this time.")
-            st.write("""
-            This data was pulled from the CDC using their research studies on listed diseases and symptoms. Please note that these predictions are not definitive diagnoses and should be used as a guide to aid in clinical decision-making. For accurate diagnosis and treatment, medical professionals should rely on comprehensive clinical evaluation and testing.
-            """)
+    st.markdown("</div>", unsafe_allow_html=True)  # /card
 
-# Custom styling for a medical-themed look with a smooth background image
-st.markdown("""
-    <style>
-    body {
-        background-image: url('https://www.example.com/medical_background.jpg');
-        background-size: cover;
-        background-attachment: fixed;
-    }
-    .stButton button {
-        background-color: #4CAF50;
-        color: white;
-        border-radius: 5px;
-        padding: 8px;
-        margin-top: 8px;
-        width: 100%;
-    }
-    .stButton button:hover {
-        background-color: #45a049;
-    }
-    .stMarkdown {
-        font-family: Arial, sans-serif;
-        color: #333333;
-        font-size: 15px;
-    }
-    .css-1aumxhk {
-        padding: 15px;
-        background: rgba(255, 255, 255, 0.8);
-        border-radius: 10px;
-    }
-    .css-18e3th9 {
-        padding: 15px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+# ── DISCLAIMER ────────────────────────────────────────────────────────────────
+st.markdown(
+    """
+    <div class="disc">
+      <strong>⚠️ Clinical Disclaimer:</strong>
+      These AI-generated predictions are intended solely as a
+      <strong>decision-support aid</strong> for trained healthcare providers.
+      They do not constitute a definitive diagnosis. All clinical decisions must be
+      grounded in comprehensive patient evaluation, laboratory investigations, and
+      professional medical judgment. Data sourced from CDC research studies.
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
